@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Dominoes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --domino-bg: #fffdf5;
+            --domino-dot: #1a1a1a;
+            --board-bg: #2d5a27;
+            --board-pattern: radial-gradient(#3a6b33 1px, transparent 1px);
+            --wood-dark: #3e2723;
+            --wood-light: #5d4037;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--board-bg);
+            background-image: var(--board-pattern);
+            background-size: 20px 20px;
+            color: #fff;
+            overflow: hidden; /* Prevent scrolling, handle it within containers */
+            touch-action: none; /* Prevent browser zoom/scroll on touch */
+        }
+
+        .domino-tile {
+            width: 40px;
+            height: 80px;
+            background-color: var(--domino-bg);
+            border-radius: 6px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.4), inset -1px -1px 3px rgba(0,0,0,0.1);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            user-select: none;
+        }
+
+        .domino-tile.horizontal {
+            width: 80px;
+            height: 40px;
+            flex-direction: row;
+        }
+
+        .domino-tile:hover:not(.played):not(.computer-tile) {
+            transform: translateY(-5px);
+            box-shadow: 4px 6px 8px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .domino-tile.playable {
+            box-shadow: 0 0 10px 3px rgba(255, 215, 0, 0.7);
+        }
+
+        .domino-divider {
+            background-color: #333;
+            width: 100%;
+            height: 2px;
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .horizontal .domino-divider {
+            width: 2px;
+            height: 100%;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .domino-half {
+            flex: 1;
+            position: relative;
+        }
+
+        /* Dot positioning logic */
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--domino-dot);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: inset -1px -1px 2px rgba(255,255,255,0.4);
+        }
+
+        /* Center */
+        .dot-c { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        /* Corners */
+        .dot-tl { top: 15%; left: 15%; }
+        .dot-tr { top: 15%; right: 15%; }
+        .dot-bl { bottom: 15%; left: 15%; }
+        .dot-br { bottom: 15%; right: 15%; }
+        /* Middles */
+        .dot-ml { top: 50%; left: 15%; transform: translateY(-50%); }
+        .dot-mr { top: 50%; right: 15%; transform: translateY(-50%); }
+        .dot-tc { top: 15%; left: 50%; transform: translateX(-50%); }
+        .dot-bc { bottom: 15%; left: 50%; transform: translateX(-50%); }
+
+        /* Hide opponent tiles */
+        .computer-tile .dot, .computer-tile .domino-divider {
+            display: none;
+        }
+        .computer-tile {
+            background-image: repeating-linear-gradient(45deg, #ddd 0, #ddd 2px, #eee 2px, #eee 4px);
+            cursor: default;
+        }
+
+        #game-board {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            /* Wood border effect */
+            border: 15px solid var(--wood-dark);
+            border-image: linear-gradient(to right, var(--wood-dark), var(--wood-light)) 1;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .played-tile {
+            position: absolute;
+            transition: all 0.3s ease;
+        }
+
+        .player-hand {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            height: 100px;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 10px 10px 0 0;
+            overflow-x: auto;
+        }
+
+        .computer-hand {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            height: 80px;
+            background-color: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 0 0 10px 10px;
+        }
+
+        /* UI Elements */
+        .modal {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        .wood-panel {
+            background-color: #8D6E63;
+            background-image: linear-gradient(45deg, #795548 25%, transparent 25%, transparent 75%, #795548 75%, #795548), linear-gradient(45deg, #795548 25%, transparent 25%, transparent 75%, #795548 75%, #795548);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            border: 4px solid #4E342E;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        /* Animations */
+        @keyframes dealAnimation {
+            from { opacity: 0; transform: translateY(50px) scale(0.5); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .anim-deal {
+            animation: dealAnimation 0.5s ease forwards;
+        }
+
+        @keyframes drawAnimation {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1) rotate(5deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+        
+        .boneyard-glow {
+            box-shadow: 0 0 15px 5px rgba(255, 255, 0, 0.8);
+            animation: drawAnimation 1s infinite;
+        }
+
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col m-0 p-0 overflow-hidden">
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center modal transition-opacity duration-300">
+        <div class="wood-panel p-8 rounded-xl max-w-md w-full mx-4 text-center border-t-8 border-yellow-600">
+            <h1 class="text-4xl font-bold mb-2 text-white shadow-sm" style="text-shadow: 2px 2px 4px #000;">
+                <i class="fa-solid fa-dice-d6 mr-2"></i> Dominoes
+            </h1>
+            <p class="text-gray-200 mb-6">Log in to save your scores or play as a guest.</p>
+            
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <input type="text" id="username" placeholder="Username" required
+                        class="w-full px-4 py-3 rounded bg-white text-gray-800 border-2 border-gray-400 focus:border-yellow-500 focus:outline-none text-lg">
+                </div>
+                <div>
+                    <input type="password" id="password" placeholder="Password (Optional for local)" 
+                        class="w-full px-4 py-3 rounded bg-white text-gray-800 border-2 border-gray-400 focus:border-yellow-500 focus:outline-none text-lg">
+                </div>
+                <div class="flex flex-col gap-3 mt-6">
+                    <button type="submit" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow-lg transition-transform transform hover:scale-105 active:scale-95 text-lg">
+                        Play Game
+                    </button>
+                    <button type="button" id="btn-guest" class="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded shadow transition-colors">
+                        Play Offline (No Cloud Save)
+                    </button>
+                </div>
+                <p id="login-error" class="text-red-400 text-sm mt-2 hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div id="game-container" class="hidden flex-col h-full w-full">
+        
+        <!-- Top Bar (Score & Computer Info) -->
+        <div class="flex justify-between items-center p-2 bg-gray-900 bg-opacity-80 text-white shrink-0 shadow-md z-10">
+            <div class="flex items-center gap-4">
+                <div class="font-bold text-lg"><i class="fa-solid fa-robot text-blue-400"></i> Computer: <span id="computer-score" class="text-yellow-400">0</span></div>
+                <div class="text-sm bg-gray-700 px-2 py-1 rounded">Tiles left: <span id="computer-count">7</span></div>
+            </div>
+            
+            <!-- Boneyard -->
+            <div id="boneyard-container" class="flex items-center gap-2 cursor-pointer bg-gray-700 px-3 py-1 rounded-full hover:bg-gray-600 transition-colors" title="Draw Tile">
+                <i class="fa-solid fa-layer-group text-yellow-500"></i>
+                <span class="font-bold text-sm">Boneyard: <span id="boneyard-count">14</span></span>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="text-sm bg-gray-700 px-2 py-1 rounded">Target: 100</div>
+                <button id="btn-menu" class="text-gray-300 hover:text-white"><i class="fa-solid fa-bars"></i></button>
+            </div>
+        </div>
+
+        <!-- Computer Hand (Visual Representation Only) -->
+        <div id="computer-hand" class="computer-hand w-full shrink-0 z-10">
+            <!-- Tiles generated here -->
+        </div>
+
+        <!-- The Play Area (Board) -->
+        <div class="flex-grow relative overflow-hidden bg-opacity-50" id="board-container">
+            <div id="game-board">
+                <!-- Played tiles go here -->
+            </div>
+            
+            <!-- Center Message Overlay -->
+            <div id="turn-indicator" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-6 py-3 rounded-full text-xl font-bold opacity-0 transition-opacity pointer-events-none z-20 shadow-lg">
+                Your Turn
+            </div>
+        </div>
+
+        <!-- Bottom Bar (Player Info & Hand) -->
+        <div class="flex flex-col shrink-0 z-10">
+            <div class="flex justify-between items-center px-4 py-1 bg-gray-900 bg-opacity-80 text-white">
+                <div class="font-bold text-lg"><i class="fa-solid fa-user text-green-400"></i> <span id="player-name-display">Player</span>: <span id="player-score" class="text-yellow-400">0</span></div>
+                <button id="btn-pass" class="hidden bg-red-600 hover:bg-red-700 px-4 py-1 rounded font-bold shadow transition-colors animate-pulse">
+                    Pass Turn
+                </button>
+            </div>
+            <div id="player-hand" class="player-hand w-full pb-6 overflow-x-auto overflow-y-visible">
+                <!-- Player tiles generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- End Round/Game Modal -->
+    <div id="end-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal">
+        <div class="wood-panel p-6 rounded-xl max-w-sm w-full mx-4 text-center border-2 border-yellow-500">
+            <h2 id="end-title" class="text-3xl font-bold mb-2 text-white">Round Over</h2>
+            <p id="end-message" class="text-xl mb-4 text-gray-200">You won this round!</p>
+            <div class="bg-black bg-opacity-40 p-4 rounded mb-6">
+                <div class="flex justify-between mb-2">
+                    <span id="end-p1-name">You:</span> <span id="end-p1-score" class="font-bold text-yellow-400">0</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Computer:</span> <span id="end-p2-score" class="font-bold text-yellow-400">0</span>
+                </div>
+            </div>
+            <button id="btn-next-round" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-lg text-lg">
+                Next Round
+            </button>
+        </div>
+    </div>
+
+    <!-- Pause/Menu Modal -->
+    <div id="menu-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal">
+        <div class="bg-gray-800 p-6 rounded-xl max-w-sm w-full mx-4 text-center border border-gray-600 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6 text-white">Menu</h2>
+            <div class="space-y-4">
+                <button id="btn-resume" class="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold">Resume Game</button>
+                <button id="btn-restart" class="w-full py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded font-semibold">Restart Match</button>
+                <button id="btn-logout" class="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded font-semibold">Quit & Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal (Replacement for window.alert) -->
+    <div id="alert-modal" class="fixed inset-0 z-[60] hidden items-center justify-center modal">
+        <div class="bg-gray-800 p-6 rounded-lg max-w-sm w-full mx-4 text-center border border-gray-600 shadow-2xl">
+            <p id="alert-message" class="text-lg text-white mb-6"></p>
+            <button id="btn-alert-close" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold">OK</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration & Setup
+        let app, db, auth;
+        let useCloudSave = false;
+        let currentUserId = null;
+        let currentUsername = "Guest";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'domino-game-default';
+        
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            }
+        } catch (e) {
+            console.warn("Firebase config not found or invalid. Defaulting to local mode.", e);
+        }
+
+        // Custom Alert Function
+        function showAlert(message) {
+            document.getElementById('alert-message').textContent = message;
+            document.getElementById('alert-modal').classList.remove('hidden');
+            document.getElementById('alert-modal').classList.add('flex');
+        }
+
+        document.getElementById('btn-alert-close').addEventListener('click', () => {
+            document.getElementById('alert-modal').classList.add('hidden');
+            document.getElementById('alert-modal').classList.remove('flex');
+        });
+
+        // --- GAME LOGIC ---
+
+        const TILE_SIZE_W = 40;
+        const TILE_SIZE_H = 80;
+        const BOARD_SCALE = 1; // For future zooming if needed
+
+        let boneyard = [];
+        let playerHand = [];
+        let computerHand = [];
+        let boardTiles = []; // To keep track of placed tiles for logic
+        
+        // Board endpoints
+        let leftEnd = { val: null, x: 0, y: 0, dir: 'left', isDouble: false };
+        let rightEnd = { val: null, x: 0, y: 0, dir: 'right', isDouble: false };
+        let isFirstMove = true;
+
+        let scores = { player: 0, computer: 0 };
+        const WINNING_SCORE = 100;
+        let isPlayerTurn = false;
+        let gameActive = false;
+
+        // UI Elements
+        const elPlayerHand = document.getElementById('player-hand');
+        const elComputerHand = document.getElementById('computer-hand');
+        const elGameBoard = document.getElementById('game-board');
+        const elBoneyardCount = document.getElementById('boneyard-count');
+        const elBoneyardContainer = document.getElementById('boneyard-container');
+        const elPassBtn = document.getElementById('btn-pass');
+        const elTurnIndicator = document.getElementById('turn-indicator');
+        const elBoardContainer = document.getElementById('board-container');
+
+
+        // Generate the 28 domino set
+        function createBoneyard() {
+            boneyard = [];
+            for (let i = 0; i <= 6; i++) {
+                for (let j = i; j <= 6; j++) {
+                    boneyard.push({ sideA: i, sideB: j, id: `t${i}${j}`, isDouble: i === j });
+                }
+            }
+            // Shuffle
+            for (let i = boneyard.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [boneyard[i], boneyard[j]] = [boneyard[j], boneyard[i]];
+            }
+        }
+
+        // Generate HTML for dots based on value
+        function getDotsHTML(value) {
+            let dots = '';
+            if (value === 1) dots = '<div class="dot dot-c"></div>';
+            else if (value === 2) dots = '<div class="dot dot-tl"></div><div class="dot dot-br"></div>';
+            else if (value === 3) dots = '<div class="dot dot-tl"></div><div class="dot dot-c"></div><div class="dot dot-br"></div>';
+            else if (value === 4) dots = '<div class="dot dot-tl"></div><div class="dot dot-tr"></div><div class="dot dot-bl"></div><div class="dot dot-br"></div>';
+            else if (value === 5) dots = '<div class="dot dot-tl"></div><div class="dot dot-tr"></div><div class="dot dot-c"></div><div class="dot dot-bl"></div><div class="dot dot-br"></div>';
+            else if (value === 6) dots = '<div class="dot dot-tl"></div><div class="dot dot-tr"></div><div class="dot dot-ml"></div><div class="dot dot-mr"></div><div class="dot dot-bl"></div><div class="dot dot-br"></div>';
+            return dots;
+        }
+
+        // Render a single tile DOM element
+        function renderTile(tileData, isHidden = false, forBoard = false) {
+            const tile = document.createElement('div');
+            tile.className = 'domino-tile shrink-0';
+            tile.dataset.id = tileData.id;
+            tile.dataset.sideA = tileData.sideA;
+            tile.dataset.sideB = tileData.sideB;
+
+            if (isHidden) {
+                tile.classList.add('computer-tile');
+            }
+
+            if (forBoard) {
+                tile.classList.add('played-tile');
+                tile.style.position = 'absolute';
+            }
+
+            const topHalf = document.createElement('div');
+            topHalf.className = 'domino-half';
+            topHalf.innerHTML = getDotsHTML(tileData.sideA);
+
+            const divider = document.createElement('div');
+            divider.className = 'domino-divider';
+
+            const bottomHalf = document.createElement('div');
+            bottomHalf.className = 'domino-half';
+            bottomHalf.innerHTML = getDotsHTML(tileData.sideB);
+
+            tile.appendChild(topHalf);
+            tile.appendChild(divider);
+            tile.appendChild(bottomHalf);
+
+            return tile;
+        }
+
+
+        function startRound() {
+            createBoneyard();
+            playerHand = boneyard.splice(0, 7);
+            computerHand = boneyard.splice(0, 7);
+            
+            boardTiles = [];
+            isFirstMove = true;
+            leftEnd = { val: null, x: 0, y: 0, dir: 'left', isDouble: false };
+            rightEnd = { val: null, x: 0, y: 0, dir: 'right', isDouble: false };
+
+            elGameBoard.innerHTML = '';
+            // Center the view on start
+            elGameBoard.style.transform = `translate(0px, 0px)`;
+
+            updateUI();
+            determineStartingPlayer();
+        }
+
+        function determineStartingPlayer() {
+            // Find highest double
+            let highestDoublePlayer = -1;
+            let highestDoubleComp = -1;
+            let pHandIdx = -1;
+            let cHandIdx = -1;
+
+            playerHand.forEach((t, i) => { if (t.isDouble && t.sideA > highestDoublePlayer) { highestDoublePlayer = t.sideA; pHandIdx = i; }});
+            computerHand.forEach((t, i) => { if (t.isDouble && t.sideA > highestDoubleComp) { highestDoubleComp = t.sideA; cHandIdx = i; }});
+
+            if (highestDoublePlayer > highestDoubleComp) {
+                setTurn(true, `You start with Double ${highestDoublePlayer}`);
+            } else if (highestDoubleComp > highestDoublePlayer) {
+                setTurn(false, `Computer starts with Double ${highestDoubleComp}`);
+                setTimeout(() => playComputerTurn(cHandIdx), 1500);
+            } else {
+                // No doubles, draw for high tile (simplified: player randomly starts if no doubles)
+                let pMax = Math.max(...playerHand.map(t => t.sideA + t.sideB));
+                let cMax = Math.max(...computerHand.map(t => t.sideA + t.sideB));
+                if (pMax >= cMax) setTurn(true, "You start");
+                else {
+                    setTurn(false, "Computer starts");
+                    setTimeout(playComputerTurn, 1500);
+                }
+            }
+        }
+
+        function setTurn(isPlayer, message = "") {
+            isPlayerTurn = isPlayer;
+            if (message) {
+                elTurnIndicator.textContent = message;
+                elTurnIndicator.style.opacity = 1;
+                setTimeout(() => elTurnIndicator.style.opacity = 0, 2000);
+            } else {
+                elTurnIndicator.textContent = isPlayer ? "Your Turn" : "Computer's Turn";
+                elTurnIndicator.style.opacity = 1;
+                setTimeout(() => elTurnIndicator.style.opacity = 0, 1500);
+            }
+
+            checkPlayability();
+        }
+
+        function updateUI() {
+            // Update hands
+            elPlayerHand.innerHTML = '';
+            playerHand.forEach((t, i) => {
+                const tEl = renderTile(t, false);
+                tEl.classList.add('anim-deal');
+                tEl.style.animationDelay = `${i * 0.05}s`;
+                
+                // Add click event for player tiles
+                tEl.addEventListener('click', () => handlePlayerTileClick(t, i));
+                
+                elPlayerHand.appendChild(tEl);
+            });
+
+            elComputerHand.innerHTML = '';
+            computerHand.forEach((t, i) => {
+                const tEl = renderTile(t, true); // Hidden
+                tEl.classList.add('anim-deal');
+                elComputerHand.appendChild(tEl);
+            });
+
+            document.getElementById('computer-count').textContent = computerHand.length;
+            elBoneyardCount.textContent = boneyard.length;
+
+            if (boneyard.length === 0) {
+                elBoneyardContainer.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                elBoneyardContainer.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+
+        function getValidEnds(tile) {
+            if (isFirstMove) return ['first'];
+            let valid = [];
+            if (tile.sideA === leftEnd.val || tile.sideB === leftEnd.val) valid.push('left');
+            if (tile.sideA === rightEnd.val || tile.sideB === rightEnd.val) valid.push('right');
+            return valid;
+        }
+
+        function canPlay(hand) {
+            if (isFirstMove) return true;
+            return hand.some(t => t.sideA === leftEnd.val || t.sideB === leftEnd.val || t.sideA === rightEnd.val || t.sideB === rightEnd.val);
+        }
+
+        function checkPlayability() {
+            // Remove previous highlights
+            Array.from(elPlayerHand.children).forEach(el => el.classList.remove('playable'));
+            elPassBtn.classList.add('hidden');
+            elBoneyardContainer.classList.remove('boneyard-glow');
+
+            if (!isPlayerTurn) return;
+
+            let hasMove = false;
+            playerHand.forEach((tile, idx) => {
+                const validEnds = getValidEnds(tile);
+                if (validEnds.length > 0) {
+                    hasMove = true;
+                    elPlayerHand.children[idx].classList.add('playable');
+                }
+            });
+
+            if (!hasMove) {
+                if (boneyard.length > 0) {
+                    elBoneyardContainer.classList.add('boneyard-glow');
+                    showAlert("You don't have a playable tile. Tap the boneyard to draw.");
+                } else {
+                    elPassBtn.classList.remove('hidden');
+                    showAlert("No tiles left in boneyard. You must pass.");
+                }
+            }
+        }
+
+
+        function placeTileOnBoard(tile, endToPlay, tileEl) {
+            const boardRect = elGameBoard.getBoundingClientRect();
+            // Start in the middle
+            const startX = elGameBoard.scrollWidth / 2;
+            const startY = elGameBoard.scrollHeight / 2;
+
+            let finalX = startX;
+            let finalY = startY;
+            let rotation = 0;
+            let matchVal = 0;
+            let unmatchVal = 0;
+
+            if (isFirstMove) {
+                tileEl.classList.add('horizontal');
+                if(tile.isDouble) {
+                   tileEl.classList.remove('horizontal'); 
+                   rotation = 0;
+                } else {
+                    rotation = 90; // visually it looks better horizontal for non-doubles
+                }
+                
+                // Center it
+                finalX = startX - (tile.isDouble ? TILE_SIZE_W : TILE_SIZE_H) / 2;
+                finalY = startY - (tile.isDouble ? TILE_SIZE_H : TILE_SIZE_W) / 2;
+
+                leftEnd = { val: tile.sideA, x: finalX, y: finalY, dir: 'left', isDouble: tile.isDouble };
+                rightEnd = { val: tile.sideB, x: finalX + (tile.isDouble ? TILE_SIZE_W : TILE_SIZE_H), y: finalY, dir: 'right', isDouble: tile.isDouble };
+                
+                if(!tile.isDouble) {
+                    // adjust right end coordinate based on rotation
+                    rightEnd.y = finalY;
+                }
+
+                isFirstMove = false;
+            } else {
+                let targetEnd = endToPlay === 'left' ? leftEnd : rightEnd;
+                matchVal = targetEnd.val;
+                unmatchVal = tile.sideA === matchVal ? tile.sideB : tile.sideA;
+
+                // Complex positioning logic based on snake layout (simplified for this version to grow linearly with some wrap)
+                // For a truly robust snake, we'd need a grid or pathing system.
+                // We'll use a simplified horizontal growth with rotation.
+
+                if (tile.isDouble) {
+                     // Place perpendicular
+                     tileEl.classList.remove('horizontal');
+                     if (endToPlay === 'left') {
+                         finalX = targetEnd.x - TILE_SIZE_W;
+                         finalY = targetEnd.y - (TILE_SIZE_H/2) + (targetEnd.isDouble? TILE_SIZE_H/2 : TILE_SIZE_W/2);
+                         leftEnd = { val: unmatchVal, x: finalX, y: finalY, dir: 'left', isDouble: true };
+                     } else {
+                         finalX = targetEnd.x;
+                         finalY = targetEnd.y - (TILE_SIZE_H/2) + (targetEnd.isDouble? TILE_SIZE_H/2 : TILE_SIZE_W/2);
+                         rightEnd = { val: unmatchVal, x: finalX + TILE_SIZE_W, y: finalY, dir: 'right', isDouble: true };
+                     }
+                } else {
+                    tileEl.classList.add('horizontal');
+                    if (endToPlay === 'left') {
+                        // Orient so matching side touches
+                        if (tile.sideA === matchVal) {
+                            rotation = 180; // Side A goes right
+                        } else {
+                            rotation = 0; // Side B goes right
+                        }
+                        finalX = targetEnd.x - TILE_SIZE_H;
+                        finalY = targetEnd.y + (targetEnd.isDouble ? TILE_SIZE_H/2 - TILE_SIZE_W/2 : 0);
+                        leftEnd = { val: unmatchVal, x: finalX, y: finalY, dir: 'left', isDouble: false };
+                    } else {
+                        if (tile.sideA === matchVal) {
+                            rotation = 0; // Side A goes left
+                        } else {
+                            rotation = 180; // Side B goes left
+                        }
+                        finalX = targetEnd.x;
+                        finalY = targetEnd.y + (targetEnd.isDouble ? TILE_SIZE_H/2 - TILE_SIZE_W/2 : 0);
+                        rightEnd = { val: unmatchVal, x: finalX + TILE_SIZE_H, y: finalY, dir: 'right', isDouble: false };
+                    }
+                }
+            }
+
+            // Apply styles
+            tileEl.style.left = `${finalX}px`;
+            tileEl.style.top = `${finalY}px`;
+            
+            // Handle visual rotation for matching sides. 
+            // In a horizontal tile, Left half is Side A, Right half is Side B.
+            if (!isFirstMove && !tile.isDouble) {
+                if (endToPlay === 'left') {
+                    if (tile.sideA === matchVal) tileEl.style.transform = `rotate(180deg)`;
+                } else {
+                     if (tile.sideB === matchVal) tileEl.style.transform = `rotate(180deg)`;
+                }
+            }
+
+            elGameBoard.appendChild(tileEl);
+            boardTiles.push(tile);
+            
+            // Auto-scroll board to keep ends visible
+            scrollToEnds();
+        }
+
+        function scrollToEnds() {
+            // Basic auto-scroll (can be improved)
+            const minX = Math.min(leftEnd.x, rightEnd.x);
+            const maxX = Math.max(leftEnd.x, rightEnd.x) + TILE_SIZE_H;
+            
+            const boardCenter = elBoardContainer.clientWidth / 2;
+            const currentCenter = (minX + maxX) / 2;
+            
+            // elGameBoard.style.transform = `translateX(${boardCenter - currentCenter}px)`;
+            // For simplicity in this non-canvas version, let overflow auto handle it mostly, 
+            // but we can try to center the last played piece.
+            elGameBoard.scrollLeft = (minX + maxX)/2 - elBoardContainer.clientWidth/2;
+        }
+
+
+        let pendingTile = null;
+        let pendingIdx = -1;
+
+        function handlePlayerTileClick(tile, idx) {
+            if (!isPlayerTurn) return;
+
+            const validEnds = getValidEnds(tile);
+            if (validEnds.length === 0) {
+                // Not playable, maybe wiggle animation?
+                return;
+            }
+
+            if (validEnds.length === 1 || isFirstMove) {
+                // Only one place to put it
+                executePlayerMove(tile, idx, validEnds[0]);
+            } else {
+                // Can go on either end. Let user choose by clicking board halves (simplified)
+                pendingTile = tile;
+                pendingIdx = idx;
+                showAlert("Choose an end! Tap left side of board for Left, right side for Right.");
+                // Add temporary overlay or listeners to board
+                elGameBoard.addEventListener('click', boardChoiceListener);
+            }
+        }
+        
+        function boardChoiceListener(e) {
+            const rect = elGameBoard.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const end = x < rect.width / 2 ? 'left' : 'right';
+            
+            elGameBoard.removeEventListener('click', boardChoiceListener);
+            document.getElementById('alert-modal').classList.add('hidden');
+            
+            if (pendingTile) {
+                executePlayerMove(pendingTile, pendingIdx, end);
+                pendingTile = null;
+                pendingIdx = -1;
+            }
+        }
+
+        function executePlayerMove(tile, idx, endToPlay) {
+            const tileEl = renderTile(tile, false, true);
+            playerHand.splice(idx, 1);
+            
+            placeTileOnBoard(tile, endToPlay, tileEl);
+            updateUI();
+            
+            if (checkRoundEnd()) return;
+            
+            setTurn(false);
+            setTimeout(playComputerTurn, 1000 + Math.random() * 1000); // Fake thinking time
+        }
+
+        // Boneyard Draw
+        elBoneyardContainer.addEventListener('click', () => {
+            if (!isPlayerTurn) return;
+            
+            if (canPlay(playerHand)) {
+                showAlert("You have a playable tile in your hand.");
+                return;
+            }
+
+            if (boneyard.length > 0) {
+                const drawn = boneyard.pop();
+                playerHand.push(drawn);
+                updateUI();
+                
+                if (getValidEnds(drawn).length > 0) {
+                    // Drew a playable tile, must play it
+                    checkPlayability();
+                } else {
+                    // Check if can play again, if not, wait for user to draw again
+                    checkPlayability();
+                }
+            }
+        });
+
+        // Pass Turn
+        elPassBtn.addEventListener('click', () => {
+            if (!isPlayerTurn) return;
+            if (canPlay(playerHand) || boneyard.length > 0) {
+                showAlert("You cannot pass right now.");
+                return;
+            }
+            
+            setTurn(false, "You Passed");
+            setTimeout(playComputerTurn, 1000);
+        });
+
+
+        function playComputerTurn(forcedIdx = -1) {
+            if (checkRoundEnd()) return;
+
+            let playable = [];
+            computerHand.forEach((t, i) => {
+                const ends = getValidEnds(t);
+                if (ends.length > 0) playable.push({tile: t, idx: i, ends: ends});
+            });
+
+            if (playable.length > 0) {
+                // Pick a tile
+                let choice;
+                if (forcedIdx !== -1) {
+                    choice = playable.find(p => p.idx === forcedIdx) || playable[0];
+                } else {
+                    // Simple AI: play highest point tile
+                    playable.sort((a, b) => (b.tile.sideA + b.tile.sideB) - (a.tile.sideA + a.tile.sideB));
+                    choice = playable[0];
+                }
+
+                const end = choice.ends[Math.floor(Math.random() * choice.ends.length)];
+                
+                const tileEl = renderTile(choice.tile, false, true); // reveal it
+                computerHand.splice(choice.idx, 1);
+                
+                placeTileOnBoard(choice.tile, end, tileEl);
+                updateUI();
+                
+                if (!checkRoundEnd()) {
+                    setTurn(true);
+                }
+            } else {
+                // Must draw or pass
+                drawOrPassComputer();
+            }
+        }
+
+        function drawOrPassComputer() {
+            if (boneyard.length > 0) {
+                // Draw
+                const drawn = boneyard.pop();
+                computerHand.push(drawn);
+                updateUI();
+                elTurnIndicator.textContent = "Computer drew a tile";
+                elTurnIndicator.style.opacity = 1;
+                setTimeout(() => elTurnIndicator.style.opacity = 0, 1000);
+
+                setTimeout(playComputerTurn, 1000); // Try again
+            } else {
+                // Pass
+                elTurnIndicator.textContent = "Computer Passed";
+                elTurnIndicator.style.opacity = 1;
+                setTimeout(() => {
+                    elTurnIndicator.style.opacity = 0;
+                    setTurn(true);
+                }, 1500);
+            }
+        }
+
+
+        function calculatePoints(hand) {
+            return hand.reduce((sum, tile) => sum + tile.sideA + tile.sideB, 0);
+        }
+
+        function checkRoundEnd() {
+            let roundOver = false;
+            let winner = null;
+            let msg = "";
+            let pts = 0;
+
+            // 1. Someone played all tiles (Domino!)
+            if (playerHand.length === 0) {
+                roundOver = true; winner = 'player'; msg = "Domino! You win the round.";
+                pts = calculatePoints(computerHand);
+            } else if (computerHand.length === 0) {
+                roundOver = true; winner = 'computer'; msg = "Computer played all tiles.";
+                pts = calculatePoints(playerHand);
+            } 
+            // 2. Blocked Game (Nobody can play, boneyard empty)
+            else if (boneyard.length === 0 && !canPlay(playerHand) && !canPlay(computerHand)) {
+                roundOver = true;
+                const pPts = calculatePoints(playerHand);
+                const cPts = calculatePoints(computerHand);
+                msg = "Game Blocked!";
+                
+                if (pPts < cPts) {
+                    winner = 'player'; msg += " You have fewer points.";
+                    pts = cPts; // Classic rules: winner gets opponents points
+                } else if (cPts < pPts) {
+                    winner = 'computer'; msg += " Computer has fewer points.";
+                    pts = pPts;
+                } else {
+                    winner = 'tie'; msg += " It's a tie!";
+                    pts = 0;
+                }
+            }
+
+            if (roundOver) {
+                gameActive = false;
+                if (winner === 'player') scores.player += pts;
+                else if (winner === 'computer') scores.computer += pts;
+
+                updateScoreDisplay();
+                showEndModal(msg, pts, winner);
+                return true;
+            }
+            return false;
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('player-score').textContent = scores.player;
+            document.getElementById('computer-score').textContent = scores.computer;
+        }
+
+        function showEndModal(msg, pts, winner) {
+            document.getElementById('end-message').textContent = msg;
+            
+            document.getElementById('end-p1-name').textContent = currentUsername + ":";
+            document.getElementById('end-p1-score').textContent = scores.player;
+            document.getElementById('end-p2-score').textContent = scores.computer;
+
+            if (scores.player >= WINNING_SCORE) {
+                document.getElementById('end-title').textContent = "Match Won!";
+                document.getElementById('btn-next-round').textContent = "Play Again";
+                saveScoreToCloud();
+            } else if (scores.computer >= WINNING_SCORE) {
+                document.getElementById('end-title').textContent = "Match Lost!";
+                document.getElementById('btn-next-round').textContent = "Play Again";
+            } else {
+                document.getElementById('end-title').textContent = "Round Over";
+                document.getElementById('btn-next-round').textContent = "Next Round";
+            }
+
+            document.getElementById('end-modal').classList.remove('hidden');
+            document.getElementById('end-modal').classList.add('flex');
+        }
+
+        document.getElementById('btn-next-round').addEventListener('click', () => {
+            document.getElementById('end-modal').classList.add('hidden');
+            document.getElementById('end-modal').classList.remove('flex');
+            
+            if (scores.player >= WINNING_SCORE || scores.computer >= WINNING_SCORE) {
+                scores = { player: 0, computer: 0 };
+                updateScoreDisplay();
+            }
+            
+            startRound();
+        });
+
+
+        // Menu Toggle
+        document.getElementById('btn-menu').addEventListener('click', () => {
+            document.getElementById('menu-modal').classList.remove('hidden');
+            document.getElementById('menu-modal').classList.add('flex');
+        });
+
+        document.getElementById('btn-resume').addEventListener('click', () => {
+            document.getElementById('menu-modal').classList.add('hidden');
+            document.getElementById('menu-modal').classList.remove('flex');
+        });
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            scores = { player: 0, computer: 0 };
+            updateScoreDisplay();
+            document.getElementById('menu-modal').classList.add('hidden');
+            document.getElementById('menu-modal').classList.remove('flex');
+            startRound();
+        });
+
+        // Login Logic
+        const loginForm = document.getElementById('login-form');
+        const loginScreen = document.getElementById('login-screen');
+        const gameContainer = document.getElementById('game-container');
+        const errDisplay = document.getElementById('login-error');
+
+        function startGameUI(username) {
+            currentUsername = username;
+            document.getElementById('player-name-display').textContent = username;
+            loginScreen.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            gameContainer.classList.add('flex');
+            
+            // Adjust board size after showing
+            elGameBoard.style.width = '3000px';
+            elGameBoard.style.height = '3000px';
+            // Scroll to center roughly
+            elGameBoard.scrollTop = 1500 - elBoardContainer.clientHeight/2;
+            elGameBoard.scrollLeft = 1500 - elBoardContainer.clientWidth/2;
+
+            startRound();
+        }
+
+        document.getElementById('btn-guest').addEventListener('click', () => {
+            useCloudSave = false;
+            startGameUI("Guest");
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('username').value.trim();
+            const pass = document.getElementById('password').value;
+
+            if (!user) return;
+
+            if (!auth) {
+                // Local only mode fallback
+                useCloudSave = false;
+                startGameUI(user);
+                return;
+            }
+
+            try {
+                // Use custom token if available, else anonymous
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                     await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                     await signInAnonymously(auth);
+                }
+                
+                useCloudSave = true;
+                currentUserId = auth.currentUser.uid;
+                
+                // Save user profile info
+                const userRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'profile', 'data');
+                await setDoc(userRef, { username: user, lastLogin: new Date().toISOString() }, {merge: true});
+
+                startGameUI(user);
+
+            } catch (error) {
+                console.error("Auth error:", error);
+                errDisplay.textContent = "Login failed. Trying playing offline.";
+                errDisplay.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('btn-logout').addEventListener('click', async () => {
+            if (auth && useCloudSave) {
+                await signOut(auth);
+            }
+            location.reload(); // Simple way to reset state and go to login
+        });
+
+        // Cloud Save Logic
+        async function saveScoreToCloud() {
+            if (!useCloudSave || !currentUserId || !db) return;
+
+            try {
+                const statsRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'stats', 'domino');
+                
+                // Get existing
+                const docSnap = await getDoc(statsRef);
+                let wins = 1;
+                if (docSnap.exists()) {
+                    wins = (docSnap.data().wins || 0) + 1;
+                }
+
+                await setDoc(statsRef, {
+                    wins: wins,
+                    lastPlayed: new Date().toISOString()
+                }, { merge: true });
+                
+                console.log("Score saved to cloud.");
+            } catch (e) {
+                console.error("Error saving score:", e);
+            }
+        }
+
+        // Initial setup for board dragging (simple pan)
+        let isDragging = false;
+        let startX, startY, scrollLeft, scrollTop;
+
+        elBoardContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.pageX - elBoardContainer.offsetLeft;
+            startY = e.pageY - elBoardContainer.offsetTop;
+            scrollLeft = elBoardContainer.scrollLeft;
+            scrollTop = elBoardContainer.scrollTop;
+        });
+        elBoardContainer.addEventListener('mouseleave', () => { isDragging = false; });
+        elBoardContainer.addEventListener('mouseup', () => { isDragging = false; });
+        elBoardContainer.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - elBoardContainer.offsetLeft;
+            const y = e.pageY - elBoardContainer.offsetTop;
+            const walkX = (x - startX) * 2;
+            const walkY = (y - startY) * 2;
+            elBoardContainer.scrollLeft = scrollLeft - walkX;
+            elBoardContainer.scrollTop = scrollTop - walkY;
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+             if(gameActive) scrollToEnds();
+        });
+
+    </script>
+</body>
+</html>
